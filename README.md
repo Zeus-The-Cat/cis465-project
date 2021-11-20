@@ -1,2 +1,3 @@
-# cis465-project
-Fall 2021 cis465 project with Christ
+# Fall 2021 CIS 465 Term Project
+## By: Chris Sweeney and Dakotah Pettry
+Analysis of BM3D Image processing technique on various noise types, with sigma optimization
