@@ -2,6 +2,7 @@ import bm3d
 import cv2
 import numpy as np
 from skimage.util import noise, random_noise
+from skimage.metrics import structural_similarity
 
 # Eventually we can perform sigma_psd optimization on different types of noisy images
 # Have to make sure we display what's going on in terminal as these steps can take a 
@@ -55,12 +56,54 @@ def addNoise(img, noise_types=['gaussian'],variance=0.2):
         noisy_images.append(random_noise(img,mode=noise_type,var=variance**2))
     return noisy_images
 
+#This site made these pretty trivial https://cvnote.ddlee.cc/2019/09/12/psnr-ssim-python
+#am smol bran, let me know if i can try to fix this, if no work good.
 # PSNR testing, returns PSNR values from img and post_img comparison 
 def psnr(img, post_img):
-    return 1.0
+    psnr = cv2.PSNR(img, post_img)
+    return psnr
+    
+#this calls ssim, to stay consistent with the implementation I'm basing all of this off of    
+#should this maybe call compareBM3D rather than ssim?
+def calc_ssim(img, post_img):
+
+    if (img.shape == post_img.shape):
+    
+        if(img.ndim == 2):
+        
+            return ssim(img, post_img)
+            
+        elif(img.ndim == 3):
+        
+            if(img.shape[2] == 3):
+                ssim = []
+                for i in range(3):
+                    ssim.append(ssim(img,post_img)
+                return np.array(ssims).mean()
+                
+            elif(img.shape[2]===1):
+                return ssim(np.squeeze(img), np.squeeze(post_img))
+        else:
+            return("error with image dimesions in calc_ssim")
 
 # SSIM testing, returns SSIM values from img and post_img comparison
+# does the sigma value need to be changed here?
 def ssim(img, post_img):
-    return 1.0
+    constant1 = (0.01 * 255) ** 2
+    constant2 = (0.03 * 255) ** 2
+    
+    img = img.astype(np.float64)
+    post_img = img.astype(np.float64)
+    gkernal = cv.getGaussianKernel(11, 1.5)
+    window = np.outer(kernel, kernel.transpose())
+
+    mu1 = cv2.filter2D(img1, -1, window)[5:-5, 5:-5] 
+    mu2 = cv2.filter2D(img2, -1, window)[5:-5, 5:-5]
+    sigma1_sq = cv2.filter2D(img1**2, -1, window)[5:-5, 5:-5] - (mu1**2)
+    sigma2_sq = cv2.filter2D(img2**2, -1, window)[5:-5, 5:-5] - (mu2**2)
+    sigma12 = cv2.filter2D(img1 * img2, -1, window)[5:-5, 5:-5] - (mu1*mu2)
+
+    ssim_map = ((2 * mu1_mu2 + C1) * (2 * sigma12 + C2)) / ((mu1_sq + mu2_sq + C1) * (sigma1_sq + sigma2_sq + C2))
+    return ssim_map.mean()
 
 processImage('Lenna.png',['gaussian','speckle'])
