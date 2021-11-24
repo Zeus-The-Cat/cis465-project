@@ -9,16 +9,17 @@ from skimage.metrics import structural_similarity
 # ---- long time to process
 
 # Normalizes img at fileName, repeatedly calls compareBM3D() to find optimal sigma_psd
-def processImage(file_name,noise_types):
+def processImage(file_name,noise_types,starting_sigma=0.2,starting_noise_variance=0.1):
     # read in original image
     img = cv2.imread(file_name)
 
     # apply random_noise (automatically normalizes image)
     # ---- mode -> gaussian, s&p, possion, or speckle
-    noisy_images = addNoise(img,noise_types=noise_types,variance=0.05)
+    noisy_images = addNoise(img,noise_types=noise_types,variance=starting_noise_variance)
 
     for index,noisy_image in enumerate(noisy_images):
-        compareBM3D(noisy_image,img,sigma=0.04,noise_type=noise_types[index])
+        print('Processing '+noise_types[index]+' at '+str(starting_noise_variance) +' variance')
+        compareBM3D(noisy_image,img,sigma=starting_sigma,noise_type=noise_types[index])
 
     return 1.0
 
@@ -27,26 +28,66 @@ def processImage(file_name,noise_types):
 # ---- specificty of 1 tells sigma to change by 0.01 (0=tenth,1=hundredth)
 # ---- stage_arg -> HARD_THRESHOLDING or ALL_STAGES (slower but better)
 def compareBM3D(normalized_noisy_img, original_img, sigma=0.2, specificity=0,noise_type=''):
-    lesser_sigma = sigma-(0.1-(specificity*0.09))
-    greater_sigma = sigma+(0.1-(specificity*0.09))
+    specificity_value = round(0.1-specificity*0.09,2)
+    lesser_sigma = sigma-specificity_value
+    greater_sigma = sigma+specificity_value
+    if greater_sigma > 1.0:
+        greater_sigma = 1.0
+    if lesser_sigma <= 0:
+        lesser_sigma = 0.01
 
-    print('Processing '+noise_type)
+
     lesser_img = bm3d.bm3d(normalized_noisy_img, sigma_psd=lesser_sigma,stage_arg=bm3d.BM3DStages.ALL_STAGES)
     img = bm3d.bm3d(normalized_noisy_img, sigma_psd=sigma,stage_arg=bm3d.BM3DStages.ALL_STAGES)
     greater_img = bm3d.bm3d(normalized_noisy_img, sigma_psd=greater_sigma,stage_arg=bm3d.BM3DStages.ALL_STAGES)
-    print('Finished, close window to continue')
     
-    # Compare PSNR and SSIM test results for each variation 
+    # Compare PSNR and SSIM test results for each variation with terminal feedback
+    norm_image = cv2.normalize(original_img, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
+    print('Processing SSIM (1/3)',end='\r')
+    ssim_lesser = calc_ssim(norm_image,lesser_img)
+    print('Processing SSIM (2/3)',end='\r')
+    ssim_starting = calc_ssim(norm_image,img)
+    print('Processing SSIM (3/3)',end='\r')
+    ssim_greater = calc_ssim(norm_image,greater_img)
+    print('Processing SSIM (3/3) Finished')
+    print('SSIM value at '+str(round(lesser_sigma,2))+' sigma:'+str(ssim_lesser))
+    print('SSIM value at '+str(round(sigma,4))+' sigma:'+str(ssim_starting))
+    print('SSIM value at '+str(round(greater_sigma,4))+' sigma:'+str(ssim_greater))
 
-    if True:
+    display_results = False
+    greatest = compareSSIM(ssim_lesser,ssim_starting,ssim_greater)
+    if greatest == 0:
+        # search finished or need to increase specificity
+        if specificity == 1:
+            print('Best Sigma '+str(round(sigma,4))+' for '+str(noise_type))
+            display_results = True
+        if specificity == 0:
+            print('Increasing Precision')
+            compareBM3D(normalized_noisy_img,original_img,sigma=sigma,specificity=1,noise_type=noise_type)
+    elif greatest == 1:
+        print('Increasing sigma by '+str(specificity_value))
+        compareBM3D(normalized_noisy_img,original_img,sigma=greater_sigma,specificity=specificity,noise_type=noise_type)
+    else:
+        print('Decreasing sigma by '+str(specificity_value))
+        compareBM3D(normalized_noisy_img,original_img,sigma=lesser_sigma,specificity=specificity,noise_type=noise_type)
+
+
+    if display_results:
+        print('Finished, close window to continue')
         # original_img needs to be normalized to display with cv2.imshow()
-        norm_image = cv2.normalize(original_img, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
         cv2.imshow(
             'Before | '+noise_type+' | After',
             np.concatenate((norm_image,normalized_noisy_img,img),axis=1)
             )
         cv2.waitKey()
 
+# returns SSIM with most similarity to original 
+def compareSSIM(less,origin,greater):
+    if less > origin and less >= greater:
+        return -1
+    if origin >= less and origin >= greater:
+        return 0
+    return 1
 
 # Adds noise to an image before/after normalization (not sure yet depends on implementation)
 # ---- type -> type of noise
@@ -66,22 +107,16 @@ def psnr(img, post_img):
 #this calls ssim, to stay consistent with the implementation I'm basing all of this off of    
 #should this maybe call compareBM3D rather than ssim?
 def calc_ssim(img, post_img):
-
     if (img.shape == post_img.shape):
-    
         if(img.ndim == 2):
-        
             return ssim(img, post_img)
-            
         elif(img.ndim == 3):
-        
             if(img.shape[2] == 3):
-                ssim = []
+                _ssim = []
                 for i in range(3):
-                    ssim.append(ssim(img,post_img)
-                return np.array(ssims).mean()
-                
-            elif(img.shape[2]===1):
+                    _ssim.append(ssim(img,post_img))
+                return np.array(_ssim).mean()
+            elif(img.shape[2]==1):
                 return ssim(np.squeeze(img), np.squeeze(post_img))
         else:
             return("error with image dimesions in calc_ssim")
@@ -89,21 +124,25 @@ def calc_ssim(img, post_img):
 # SSIM testing, returns SSIM values from img and post_img comparison
 # does the sigma value need to be changed here?
 def ssim(img, post_img):
-    constant1 = (0.01 * 255) ** 2
-    constant2 = (0.03 * 255) ** 2
+    C1 = (0.01 * 255) ** 2
+    C2 = (0.03 * 255) ** 2
     
-    img = img.astype(np.float64)
-    post_img = img.astype(np.float64)
-    gkernal = cv.getGaussianKernel(11, 1.5)
-    window = np.outer(kernel, kernel.transpose())
+    gkernal = cv2.getGaussianKernel(11, 1.5)
+    window = np.outer(gkernal, gkernal.transpose())
 
-    mu1 = cv2.filter2D(img1, -1, window)[5:-5, 5:-5] 
-    mu2 = cv2.filter2D(img2, -1, window)[5:-5, 5:-5]
-    sigma1_sq = cv2.filter2D(img1**2, -1, window)[5:-5, 5:-5] - (mu1**2)
-    sigma2_sq = cv2.filter2D(img2**2, -1, window)[5:-5, 5:-5] - (mu2**2)
-    sigma12 = cv2.filter2D(img1 * img2, -1, window)[5:-5, 5:-5] - (mu1*mu2)
+    mu1 = cv2.filter2D(img, -1, window)[5:-5, 5:-5] 
+    mu2 = cv2.filter2D(post_img, -1, window)[5:-5, 5:-5]
+    sigma1_sq = cv2.filter2D(img**2, -1, window)[5:-5, 5:-5] - (mu1**2)
+    sigma2_sq = cv2.filter2D(post_img**2, -1, window)[5:-5, 5:-5] - (mu2**2)
+    sigma12 = cv2.filter2D(img * post_img, -1, window)[5:-5, 5:-5] - (mu1*mu2)
 
-    ssim_map = ((2 * mu1_mu2 + C1) * (2 * sigma12 + C2)) / ((mu1_sq + mu2_sq + C1) * (sigma1_sq + sigma2_sq + C2))
+    ssim_map = ((2 * mu1* mu2 + C1) * (2 * sigma12 + C2)) / ((mu1**2 + mu2**2 + C1) * (sigma1_sq + sigma2_sq + C2))
     return ssim_map.mean()
 
-processImage('Lenna.png',['gaussian','speckle'])
+# Super Noisy image low detail retention
+# processImage('Lenna.png',['gaussian'],starting_noise_variance=0.75)
+# Medium Noise levels Blobby but maintained areas of interest
+processImage('Lenna.png',['gaussian'],starting_noise_variance=0.3)
+# Low Noise Levels nearly identical, with few minor details missing
+# processImage('Lenna.png',['gaussian'],starting_noise_variance=0.05)
+
