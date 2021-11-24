@@ -18,7 +18,7 @@ def processImage(file_name,noise_types,starting_sigma=0.2,starting_noise_varianc
     noisy_images = addNoise(img,noise_types=noise_types,variance=starting_noise_variance)
 
     for index,noisy_image in enumerate(noisy_images):
-        print('Processing '+noise_types[index]+' at '+str(starting_noise_variance) +' variance')
+        print('Processing '+noise_types[index]+' noise at '+str(starting_noise_variance) +' variance')
         compareBM3D(noisy_image,img,sigma=starting_sigma,noise_type=noise_types[index])
 
     return 1.0
@@ -36,20 +36,20 @@ def compareBM3D(normalized_noisy_img, original_img, sigma=0.2, specificity=0,noi
     if lesser_sigma <= 0:
         lesser_sigma = 0.01
 
-
+    print('Processing BM3D (1/3)',end='\r')
     lesser_img = bm3d.bm3d(normalized_noisy_img, sigma_psd=lesser_sigma,stage_arg=bm3d.BM3DStages.ALL_STAGES)
+    print('Processing BM3D (2/3)',end='\r')
     img = bm3d.bm3d(normalized_noisy_img, sigma_psd=sigma,stage_arg=bm3d.BM3DStages.ALL_STAGES)
+    print('Processing BM3D (3/3)',end='\r')
     greater_img = bm3d.bm3d(normalized_noisy_img, sigma_psd=greater_sigma,stage_arg=bm3d.BM3DStages.ALL_STAGES)
+    print('Processing BM3D (3/3) Finished')
     
     # Compare PSNR and SSIM test results for each variation with terminal feedback
     norm_image = cv2.normalize(original_img, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
-    print('Processing SSIM (1/3)',end='\r')
+    
     ssim_lesser = calc_ssim(norm_image,lesser_img)
-    print('Processing SSIM (2/3)',end='\r')
     ssim_starting = calc_ssim(norm_image,img)
-    print('Processing SSIM (3/3)',end='\r')
     ssim_greater = calc_ssim(norm_image,greater_img)
-    print('Processing SSIM (3/3) Finished')
     print('SSIM value at '+str(round(lesser_sigma,2))+' sigma:'+str(ssim_lesser))
     print('SSIM value at '+str(round(sigma,4))+' sigma:'+str(ssim_starting))
     print('SSIM value at '+str(round(greater_sigma,4))+' sigma:'+str(ssim_greater))
@@ -76,7 +76,7 @@ def compareBM3D(normalized_noisy_img, original_img, sigma=0.2, specificity=0,noi
         print('Finished, close window to continue')
         # original_img needs to be normalized to display with cv2.imshow()
         cv2.imshow(
-            'Before | '+noise_type+' | After',
+            'Before | '+noise_type+' | BM3D '+str(round(sigma,2)),
             np.concatenate((norm_image,normalized_noisy_img,img),axis=1)
             )
         cv2.waitKey()
@@ -142,7 +142,7 @@ def ssim(img, post_img):
 # Super Noisy image low detail retention
 # processImage('Lenna.png',['gaussian'],starting_noise_variance=0.75)
 # Medium Noise levels Blobby but maintained areas of interest
-processImage('Lenna.png',['gaussian'],starting_noise_variance=0.3)
+# processImage('Baboon.png',['gaussian'],starting_noise_variance=0.5)
 # Low Noise Levels nearly identical, with few minor details missing
-# processImage('Lenna.png',['gaussian'],starting_noise_variance=0.05)
+processImage('Lenna.png',['gaussian'],starting_noise_variance=0.1)
 
