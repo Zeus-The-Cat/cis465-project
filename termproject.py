@@ -74,12 +74,18 @@ def compareBM3D(normalized_noisy_img, original_img, sigma=0.2, specificity=0,noi
 
     if display_results:
         print('Finished, close window to continue')
+        # This if statement needs to be turned to true when processing grayscale images
+        if False:
+            normalized_noisy_img = cv2.cvtColor(normalized_noisy_img.astype('float32'), cv2.COLOR_BGR2GRAY)
+            img = cv2.cvtColor(img.astype('float32'), cv2.COLOR_BGR2GRAY)
+            norm_image = cv2.cvtColor(norm_image.astype('float32'), cv2.COLOR_BGR2GRAY)
         cv2.imshow(
             'Before | '+noise_type+' | BM3D '+str(round(sigma,2)),
             np.concatenate((norm_image,normalized_noisy_img,img),axis=1)
             )
         cv2.waitKey()
         img_out = np.concatenate((norm_image,normalized_noisy_img,img),axis=1)
+        # img_out = np.concatenate((normalized_noisy_img,img),axis=1)
         img_out = img_out*255
         img_out = img_out.astype('uint8')
         return (img_out , str(round(sigma,2)))
@@ -142,13 +148,10 @@ def ssim(img, post_img):
     ssim_map = ((2 * mu1* mu2 + C1) * (2 * sigma12 + C2)) / ((mu1**2 + mu2**2 + C1) * (sigma1_sq + sigma2_sq + C2))
     return ssim_map.mean()
 
+# Demo try various commented commands below for different examples
+processImage('Lenna.png',['gaussian'],starting_sigma=0.1, starting_noise_variance=0.12)
 # Super Noisy image low detail retention
-# processImage('Lenna.png',['gaussian'],starting_noise_variance=0.75)
+# processImage('peppers.jpg.png',['gaussian'],starting_noise_variance=0.75)
 # Medium Noise levels Blobby but maintained areas of interest
-# processImage('Baboon.png',['gaussian'],starting_noise_variance=0.5)
-# Low Noise Levels nearly identical, with few minor details missing
-# processImage('peppers.jpg',['gaussian'],starting_sigma=0.1, starting_noise_variance=0.1)
-
-
-# Demo
-processImage('Lenna.png',['gaussian'],starting_sigma=0.1, starting_noise_variance=0.05)
+# processImage('Lenna.png',['gaussian'],starting_noise_variance=0.5)
+# processImage('Lenna.png',['gaussian'],starting_noise_variance=0.3)
